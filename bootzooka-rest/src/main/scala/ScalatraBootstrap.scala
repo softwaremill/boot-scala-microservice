@@ -19,9 +19,11 @@ class ScalatraBootstrap extends LifeCycle with Beans {
     context.mount(new PasswordRecoveryServlet(passwordRecoveryService, userService), Prefix + "passwordrecovery")
 
     context.setAttribute("bootzooka", this)
+
+    start()
   }
 
   override def destroy(context: ServletContext) {
-
+    stop()
   }
 }

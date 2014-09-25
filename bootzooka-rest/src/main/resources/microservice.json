@@ -1,0 +1,7 @@
+{
+    "pl": {
+        "this": "pl/softwaremill/boot-scala",
+        "dependencies": {
+        }
+    }
+}

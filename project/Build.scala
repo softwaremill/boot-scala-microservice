@@ -1,5 +1,5 @@
 import sbt._
-import Keys._
+import sbt.Keys._
 import net.virtualvoid.sbt.graph.Plugin._
 import com.earldouglas.xsbtwebplugin.PluginKeys._
 import sbt.ScalaVersion
@@ -20,9 +20,10 @@ object BuildSettings {
     libraryDependencies ++= Dependencies.logging,
     libraryDependencies ++= Seq(Dependencies.guava, Dependencies.googleJsr305),
 
-    parallelExecution := false
-  )
+    parallelExecution := false,
 
+    resolvers += "JCenter" at "http://jcenter.bintray.com"
+  )
 }
 
 object Dependencies {
@@ -82,7 +83,7 @@ object Dependencies {
   //lift-mongodb-record depends on older mongo-java-driver, but for fakeMongo we need newer
   val mongoJava = "org.mongodb" % "mongo-java-driver" % "2.12.2" % "test"
 
-  val selenium = Seq(seleniumJava, seleniumFirefox, fest)
+  val microDeps = "com.ofg" % "micro-deps" % "0.5.5" exclude("org.jboss.spec.javax.annotation", "jboss-annotations-api_1.2_spec") exclude("org.jboss.spec.javax.servlet", "jboss-servlet-api_3.1_spec") exclude("commons-collections", "commons-collections")
 
   // If the scope is provided;test, as in scalatra examples then gen-idea generates the incorrect scope (test).
   // As provided implies test, so is enough here.
@@ -111,25 +112,11 @@ object BootzookaBuild extends Build {
     }
   }
 
-  def updateNpm() = (baseDirectory, streams) map { (bd, s) =>
-    println("Updating NPM dependencies")
-    haltOnCmdResultError(Process("npm install", bd)!)
-  }
-
-  def gruntTask(taskName: String) = (baseDirectory, streams) map { (bd, s) =>
-    val localGruntCommand = "./node_modules/.bin/grunt " + taskName
-    def buildGrunt() = {
-      Process(localGruntCommand, bd / ".." / "bootzooka-ui").!
-    }
-    println("Building with Grunt.js : " + taskName)
-    haltOnCmdResultError(buildGrunt())
-  }
-
   lazy val parent: Project = Project(
     "bootzooka-root",
     file("."),
     settings = buildSettings
-  ) aggregate(common, domain, dao, service, rest, ui, dist)
+  ) aggregate(common, domain, dao, service, rest, dist)
 
   lazy val common: Project = Project(
     "bootzooka-common",
@@ -166,26 +153,12 @@ object BootzookaBuild extends Build {
       // We need to include the whole webapp, hence replacing the resource directory
       webappResources in Compile <<= baseDirectory { bd =>
         val restResources = bd.getParentFile / rest.base.getName / "src" / "main" / "webapp"
-        val uiResources = bd.getParentFile / ui.base.getName / "dist" / "webapp"
-        // "dist" may not yet exist, as it will be created by grunt later. However, we still need to include it, and
-        // if it doesn't exist, SBT will complain
-        if (!uiResources.exists() && !uiResources.mkdirs()) {
-          throw new RuntimeException(s"$uiResources directory doesn't exist, and cannot be created!")
-        }
-        List(restResources, uiResources)
+        List(restResources)
       },
-      packageWar in DefaultConf <<= (packageWar in DefaultConf) dependsOn gruntTask("build"),
-      libraryDependencies ++= Seq(jettyContainer, servletApiProvided)
+      packageWar in DefaultConf <<= (packageWar in DefaultConf),
+      libraryDependencies ++= Seq(jettyContainer, servletApiProvided, microDeps)
     )
   ) dependsOn(service, domain, common)
-
-  lazy val ui = Project(
-    "bootzooka-ui",
-    file("bootzooka-ui"),
-    settings = buildSettings ++ Seq(
-      test in Test <<= (test in Test) dependsOn(updateNpm(), gruntTask("test"))
-    )
-  )
 
   lazy val dist = Project(
     "bootzooka-dist",
@@ -195,16 +168,8 @@ object BootzookaBuild extends Build {
       mainClass in assembly := Some("com.softwaremill.bootzooka.Bootzooka"),
       // We need to include the whole webapp, hence replacing the resource directory
       unmanagedResourceDirectories in Compile <<= baseDirectory { bd => {
-        List(bd.getParentFile / rest.base.getName / "src" / "main", bd.getParentFile / ui.base.getName / "dist")
+        List(bd.getParentFile / rest.base.getName / "src" / "main", bd.getParentFile / "dist")
       } }
     )
-  ) dependsOn (ui, rest)
-
-  lazy val uiTests = Project(
-    "bootzooka-ui-tests",
-    file("bootzooka-ui-tests"),
-    settings = buildSettings ++ Seq(
-      libraryDependencies ++= selenium ++ Seq(awaitility, jettyTest, servletApiProvided)
-    )
-  ) dependsOn (dist)
+  ) dependsOn (rest)
 }

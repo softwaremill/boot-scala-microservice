@@ -1,8 +1,9 @@
 package com.softwaremill.bootzooka
 
 import com.softwaremill.bootzooka.dao.{MongoPasswordResetCodeDAO, MongoUserDAO}
+import com.softwaremill.bootzooka.infrastructure.MicroDeps
 import com.softwaremill.bootzooka.service.PasswordRecoveryService
-import com.softwaremill.bootzooka.service.config.{BootzookaConfig, EmailConfig}
+import com.softwaremill.bootzooka.service.config.{MicroDepsConfig, BootzookaConfig, EmailConfig}
 import com.softwaremill.bootzooka.service.email.{DummyEmailSendingService, ProductionEmailSendingService}
 import com.softwaremill.bootzooka.service.templates.EmailTemplatingEngine
 import com.softwaremill.bootzooka.service.user.{RegistrationDataValidator, UserService}
@@ -10,7 +11,7 @@ import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.slf4j.Logging
 
 trait Beans extends Logging {
-  lazy val config = new BootzookaConfig with EmailConfig {
+  lazy val config = new BootzookaConfig with EmailConfig with MicroDepsConfig {
     override def rootConfig = ConfigFactory.load()
   }
 
@@ -39,4 +40,14 @@ trait Beans extends Logging {
     emailScheduler,
     emailTemplatingEngine,
     config)
+
+  val microDeps = new MicroDeps(config)
+
+  def start(): Unit = {
+    microDeps.start()
+  }
+
+  def stop(): Unit = {
+    microDeps.stop()
+  }
 }
